@@ -1,0 +1,65 @@
+{
+  "lastUpdated": "2026-04-08T06:38:50.111Z",
+  "structure": {
+    "src/tools/map-generator.ts": {
+      "module": "src/tools",
+      "functions": [
+        {
+          "name": "getPurposeFromJsDoc",
+          "purpose": "Chưa có mô tả (Tạo tự động)",
+          "dependencies": [
+            "ts-morph",
+            "fs",
+            "path"
+          ]
+        },
+        {
+          "name": "main",
+          "purpose": "Chưa có mô tả (Tạo tự động)",
+          "dependencies": [
+            "ts-morph",
+            "fs",
+            "path"
+          ]
+        }
+      ]
+    },
+    "src/tools/map-updater.ts": {
+      "module": "src/tools",
+      "functions": [
+        {
+          "name": "parseArgs",
+          "purpose": "Chưa có mô tả (Tạo tự động)",
+          "dependencies": [
+            "fs",
+            "path"
+          ]
+        },
+        {
+          "name": "loadMap",
+          "purpose": "Chưa có mô tả (Tạo tự động)",
+          "dependencies": [
+            "fs",
+            "path"
+          ]
+        },
+        {
+          "name": "saveMap",
+          "purpose": "Chưa có mô tả (Tạo tự động)",
+          "dependencies": [
+            "fs",
+            "path"
+          ]
+        },
+        {
+          "name": "main",
+          "purpose": "Chưa có mô tả (Tạo tự động)",
+          "dependencies": [
+            "fs",
+            "path"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+# Dòng này là chú thích - Git sẽ bỏ qua
+*.log
+node_modules/
+.env
+/temp
+!important.log
+*.txt
+!notme.txt

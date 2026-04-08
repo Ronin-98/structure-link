@@ -1,0 +1,20 @@
+{
+  "name": "structure-link",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "map:update": "ts-node src/tools/map-updater.ts",
+    "map:generate": "ts-node src/tools/map-generator.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "ts-morph": "^27.0.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
+}
