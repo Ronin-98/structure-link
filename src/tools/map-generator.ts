@@ -1,11 +1,69 @@
 // @ts-nocheck
-import { Project, SyntaxKind } from 'ts-morph';
+import { Project } from 'ts-morph';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const MAP_FILE_PATH = path.join(__dirname, '../../project-map.json');
-const ROOT_DIR = path.join(__dirname, '../../');
+// --- Parser Tham Số Dòng Lệnh ---
+const args = process.argv.slice(2);
+const isHelp = args.includes('--help') || args.includes('-h');
 
+if (isHelp) {
+  console.log(`
+🚀 Map Generator CLI
+
+Sử dụng:
+  npm run map:generate -- [options]
+  ts-node src/tools/map-generator.ts [options]
+
+Tùy chọn:
+  --help, -h       : Hiển thị hướng dẫn
+  --output, -o     : Đường dẫn file lưu kết quả (mặc định: ./project-map.json)
+  --dirs, -d       : Các thư mục con cần quét (cách nhau dấu phẩy). VD: "apps/frontend,apps/backend"
+  --ignore, -i     : Các từ khóa chứa trong tên file/thư mục cần bỏ qua (cách nhau dấu phẩy). VD: "test,mock"
+  `);
+  process.exit(0);
+}
+
+// Thiết lập cấu hình mặc định
+let mapFilePath = path.join(process.cwd(), 'project-map.json');
+let projectRoot = process.cwd();
+let targetDirs: string[] = [];
+let ignoreList: string[] = ['node_modules', 'dist', 'build', '.git'];
+
+// Check file config trước
+const configPath = path.join(process.cwd(), 'structure.config.json');
+if (fs.existsSync(configPath)) {
+  try {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (config.dirs && Array.isArray(config.dirs)) {
+      targetDirs = config.dirs;
+    }
+  } catch (e) {
+    console.error(`⚠️ Lỗi khi đọc structure.config.json: ${e.message}`);
+  }
+}
+
+// Đọc tham số (ghi đè nếu có truyền cờ trên CLI)
+for (let i = 0; i < args.length; i++) {
+  if ((args[i] === '--output' || args[i] === '-o') && args[i + 1]) {
+    mapFilePath = path.resolve(process.cwd(), args[i + 1]);
+    i++;
+  } else if ((args[i] === '--dirs' || args[i] === '-d') && args[i + 1]) {
+    targetDirs = args[i + 1].split(',').map(d => d.trim()).filter(Boolean);
+    i++;
+  } else if ((args[i] === '--ignore' || args[i] === '-i') && args[i + 1]) {
+    const extraIgnores = args[i + 1].split(',').map(s => s.trim()).filter(Boolean);
+    ignoreList.push(...extraIgnores);
+    i++;
+  }
+}
+
+// Nếu không có thư mục nào được cung cấp, mặc định là root
+if (targetDirs.length === 0) {
+  targetDirs = ['.'];
+}
+
+// Cấu trúc dữ liệu
 interface FunctionMeta {
   name: string;
   purpose: string;
@@ -22,8 +80,9 @@ interface ProjectMap {
   structure: Record<string, FileMeta>;
 }
 
+// Tiện ích lấy mô tả từ JSDoc
 function getPurposeFromJsDoc(node: any): string {
-  if (node.getJsDocs) {
+  if (typeof node.getJsDocs === 'function') {
     const jsdocs = node.getJsDocs();
     if (jsdocs && jsdocs.length > 0) {
       return jsdocs[0].getDescription().trim();
@@ -32,89 +91,112 @@ function getPurposeFromJsDoc(node: any): string {
   return "Chưa có mô tả (Tạo tự động)";
 }
 
+// Kiểm tra bỏ qua file/folder
+function shouldIgnore(filePath: string): boolean {
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  return ignoreList.some(pattern => normalizedPath.includes(pattern));
+}
+
+// Chạy luồng chính
 function main() {
-  console.log('[Map Generator] Đang quét toàn bộ dự án...');
-
-  const project = new Project({
-    tsConfigFilePath: path.join(ROOT_DIR, 'tsconfig.json'),
-  });
-
-  // Có thể bạn chỉ muốn quét trong mục src, bỏ qua test hoặc tools.
-  const sourceFiles = project.getSourceFiles();
+  console.log(`\n🔍 [Map Generator] Đang quét codebase tại các thư mục: ${targetDirs.join(', ')}`);
+  console.log(`📁 File kết quả: ${mapFilePath}`);
+  console.log(`🚫 Đang bỏ qua các file/thư mục chứa: ${ignoreList.join(', ')}\n`);
 
   const newMap: ProjectMap = {
     lastUpdated: new Date().toISOString(),
     structure: {}
   };
 
-  for (const sourceFile of sourceFiles) {
-    // Chỉ file trong project nội bộ, bỏ dts và node_modules
-    if (sourceFile.isFromExternalLibrary() || sourceFile.isDeclarationFile()) {
+  let processedCount = 0;
+
+  for (const dir of targetDirs) {
+    const baseDir = path.resolve(projectRoot, dir);
+    if (!fs.existsSync(baseDir)) {
+      console.warn(`⚠️ [Cảnh báo] Thư mục ${dir} không tồn tại, bỏ qua.`);
       continue;
     }
 
-    const filePath = path.relative(ROOT_DIR, sourceFile.getFilePath()).replace(/\\/g, '/');
+    const tsConfigFilePath = path.join(baseDir, 'tsconfig.json');
     
-    // Thu thập Import làm dependency chung cho file/hàm
-    const imports = sourceFile.getImportDeclarations();
-    const fileDependencies = imports.map(imp => imp.getModuleSpecifierValue());
+    // Khởi tạo Project ts-morph
+    const project = new Project({
+      tsConfigFilePath: fs.existsSync(tsConfigFilePath) ? tsConfigFilePath : undefined,
+    });
 
-    const fileMeta: FileMeta = {
-      module: path.dirname(filePath),
-      functions: []
-    };
-
-    // Quét Functions (Hàm bình thường)
-    const functions = sourceFile.getFunctions();
-    for (const func of functions) {
-      const name = func.getName() || 'anonymous_func';
-      fileMeta.functions.push({
-        name,
-        purpose: getPurposeFromJsDoc(func),
-        dependencies: [...fileDependencies] // Lấy deps từ imports
-      });
+    // Nếu không có tsconfig, bổ sung sources cơ bản
+    if (!fs.existsSync(tsConfigFilePath)) {
+      project.addSourceFilesAtPaths(path.join(baseDir, '**/*.ts'));
     }
 
-    // Quét Classes
-    const classes = sourceFile.getClasses();
-    for (const cls of classes) {
-      const className = cls.getName() || 'anonymous_class';
-      fileMeta.functions.push({
-        name: className,
-        purpose: getPurposeFromJsDoc(cls) || `Class ${className}`,
-        dependencies: [...fileDependencies]
-      });
+    const sourceFiles = project.getSourceFiles();
 
-      // Lấy thêm các method trong class
-      const methods = cls.getMethods();
-      for (const method of methods) {
+    for (const sourceFile of sourceFiles) {
+      if (sourceFile.isFromExternalLibrary() || sourceFile.isDeclarationFile()) {
+        continue;
+      }
+
+      const absolutePath = sourceFile.getFilePath();
+      if (shouldIgnore(absolutePath)) {
+        continue;
+      }
+
+      // Đường dẫn file tương đối so với project root để đảm bảo thống nhất
+      const relativePath = path.relative(projectRoot, absolutePath).replace(/\\/g, '/');
+      
+      const imports = sourceFile.getImportDeclarations();
+      const fileDependencies = imports.map(imp => imp.getModuleSpecifierValue());
+
+      const fileMeta: FileMeta = {
+        module: path.dirname(relativePath),
+        functions: []
+      };
+
+      // Hàm bình thường
+      const functions = sourceFile.getFunctions();
+      for (const func of functions) {
         fileMeta.functions.push({
-          name: `${className}.${method.getName()}`,
-          purpose: getPurposeFromJsDoc(method),
+          name: func.getName() || 'anonymous_func',
+          purpose: getPurposeFromJsDoc(func),
           dependencies: [...fileDependencies]
         });
       }
-    }
 
-    // Nếu có quét được function hay class thì mới đưa vào cấu trúc
-    if (fileMeta.functions.length > 0) {
-      newMap.structure[filePath] = fileMeta;
+      // Classes & Methods
+      const classes = sourceFile.getClasses();
+      for (const cls of classes) {
+        const className = cls.getName() || 'anonymous_class';
+        fileMeta.functions.push({
+          name: className,
+          purpose: getPurposeFromJsDoc(cls) || `Class ${className}`,
+          dependencies: [...fileDependencies]
+        });
+
+        const methods = cls.getMethods();
+        for (const method of methods) {
+          fileMeta.functions.push({
+            name: `${className}.${method.getName()}`,
+            purpose: getPurposeFromJsDoc(method),
+            dependencies: [...fileDependencies]
+          });
+        }
+      }
+
+      if (fileMeta.functions.length > 0) {
+        newMap.structure[relativePath] = fileMeta;
+        processedCount++;
+      }
     }
   }
 
-  // Đọc map cũ để hợp nhất (merge) nếu cần thiết, nhưng ở đây vẽ lại hoàn toàn thì ghi đè là tốt nhất
-  let finalMap = newMap;
-  if (fs.existsSync(MAP_FILE_PATH)) {
-    try {
-      const oldMap: ProjectMap = JSON.parse(fs.readFileSync(MAP_FILE_PATH, 'utf-8'));
-      // Ở đây ta ghi đè hoàn toàn map mới, nhưng nếu muốn thì có thể merge
-      // Để phục vụ "vẽ lại map cho các dự án dang dở", việc làm mới (reset) map cho đúng hiện trạng code là an toàn nhất.
-      console.log(`[Map Generator] Đã tìm thấy map cũ. Sẽ cập nhật và ghi đè bằng cấu trúc mới quét được từ source.`);
-    } catch(e) {}
+  // Đảm bảo thư mục lưu file tồn tại
+  const outputDir = path.dirname(mapFilePath);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  fs.writeFileSync(MAP_FILE_PATH, JSON.stringify(finalMap, null, 2), 'utf-8');
-  console.log(`[Map Generator] Đã tạo lại thành công project-map.json với ${Object.keys(finalMap.structure).length} files.`);
+  fs.writeFileSync(mapFilePath, JSON.stringify(newMap, null, 2), 'utf-8');
+  console.log(`✅ [Map Generator] Đã tạo thành công map với ${processedCount} file hợp lệ.\n`);
 }
 
 main();

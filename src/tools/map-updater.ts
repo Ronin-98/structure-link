@@ -71,6 +71,8 @@ function main() {
         module: module || 'Khác',
         functions: []
       };
+    } else if (module) {
+      map.structure[file].module = module;
     }
 
     const funcIndex = map.structure[file].functions.findIndex(f => f.name === func);
