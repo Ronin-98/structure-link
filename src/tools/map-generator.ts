@@ -28,7 +28,7 @@ Tùy chọn:
 let mapFilePath = path.join(process.cwd(), 'project-map.json');
 let projectRoot = process.cwd();
 let targetDirs: string[] = [];
-let ignoreList: string[] = ['node_modules', 'dist', 'build', '.git'];
+let ignoreList: string[] = ['node_modules', 'dist', 'build', '.git', 'skills', 'rules'];
 
 // Check file config trước
 const configPath = path.join(process.cwd(), 'structure.config.json');
@@ -37,6 +37,9 @@ if (fs.existsSync(configPath)) {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     if (config.dirs && Array.isArray(config.dirs)) {
       targetDirs = config.dirs;
+    }
+    if (config.ignore && Array.isArray(config.ignore)) {
+      ignoreList.push(...config.ignore);
     }
   } catch (e) {
     console.error(`⚠️ Lỗi khi đọc structure.config.json: ${e.message}`);

@@ -2,6 +2,12 @@
 
 Nhằm mục đích quản lý tốt dự án với nhiều thư mục con (ví dụ: frontend, backend, worker, signer...), dự án này sử dụng một file JSON duy nhất để quản lý cấu trúc: `project-map.json` tại thư mục root. Không còn dùng map riêng biệt cho từng thư mục con nữa.
 
+## ĐIỀU KIỆN BẮT BUỘC ĐỐI VỚI AI AGENT
+**Mỗi lần bắt đầu thực hiện yêu cầu (prompt) từ người dùng, AI Agent BẮT BUỘC phải đọc file `project-map.json` đầu tiên.**
+Việc này nhằm mục đích:
+1. Xác định nhanh và nắm bắt chính xác cấu trúc hiện tại của dự án monorepo.
+2. Tiện lợi cho việc tham chiếu khi thêm mới hoặc cập nhật công dụng (purpose) của các function/file sau này.
+
 Khi AI tiến hành **thêm mới, chỉnh sửa hàm** hoặc **tạo file mới**, AI **TUYỆT ĐỐI BẮT BUỘC** phải gọi ứng dụng (tool CLI) cài sẵn trong dự án để hệ thống tự động cập nhật lại map dự án. Không được trực tiếp ghép vào prompt hay chỉnh sửa JSON thủ công trừ khi có lý do chính đáng.
 
 ## CÁCH GỌI (TERMINAL COMMAND)
